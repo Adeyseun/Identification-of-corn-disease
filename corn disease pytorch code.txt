@@ -1,0 +1,493 @@
+
+import scipy
+from scipy import io
+import torch
+import torch.optim as optim
+import torch.nn as nn
+from torchvision.datasets import ImageFolder
+from torchvision import transforms, models
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+from torch.autograd import variable
+from sklearn.metrics import classification_report, confusion_matrix
+import math
+from tqdm.notebook import tqdm
+import pandas as pd
+import seaborn as sns
+from torchvision import transforms, utils
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import auc
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import auc
+from scipy.io import loadmat,savemat
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn import Linear, ReLU,CrossEntropyLoss,Sequential,Conv2d,MaxPool2d,Module,BatchNorm2d,Dropout,AdaptiveAvgPool2d
+from torch.optim import Adam,SGD
+from torch.autograd import Variable
+
+
+print("MODIFIED developed MODEL FOR TRAINING CORN DISEASE")
+
+# Define the train/validation dataset loader
+
+data_dir = '/datasets/Corn/train'
+def load_split_train_test (datadir,valid_size = .20):
+
+    train_transforms = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize (mean =[0.485,0.456,0.406], std = [0.229,0.224,0.225
+                                                            ])])
+
+    test_transforms = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize (mean =[0.485,0.456,0.406], std = [0.229,0.224,0.225
+                                                            ])])
+ 
+ 
+    train_data = ImageFolder(root='traincorn',transform=train_transforms)
+    
+    valid_data = ImageFolder(root='traincorn',transform=test_transforms)
+    
+    testset = ImageFolder(root='corntest',transform=test_transforms)
+
+
+    
+    # shuffle the training data
+    num_train = len(train_data)
+    indices = list(range(num_train))
+    split = int(np.floor(valid_size * num_train))
+    np.random.shuffle(indices)
+ 
+    # Split data for training and validation
+    
+    from torch.utils.data.sampler import SubsetRandomSampler
+    train_idx,test_idx = indices[split:],indices[:split]
+    train_sampler = SubsetRandomSampler(train_idx)
+    test_sampler = SubsetRandomSampler(test_idx)
+
+    trainloader = torch.utils.data.DataLoader(train_data,sampler = 
+                                          train_sampler,batch_size = 64)
+
+    validloader = torch.utils.data.DataLoader(valid_data,sampler = 
+                                         test_sampler,batch_size = 64)
+    
+
+    return trainloader, validloader
+
+trainloader,validloader = load_split_train_test(data_dir,.20)
+print(trainloader.dataset.classes)
+
+# check for the availability of GPU and load the model
+
+device = torch.device( "cuda:0" if torch.cuda.is_available() else "cpu")
+# verifying cuda
+print("The available device is :",device)
+
+# Defining the designed Model
+
+# Defining the designed Model
+
+class Net(Module):
+ 
+    def __init__ (self):
+        super(Net, self). __init__ ()
+        self.cnn_layers = Sequential (
+        
+            # defining a 2d conv. layer
+            Conv2d (3,256,kernel_size = 11, stride = 4, padding = 2),
+            BatchNorm2d(256),
+            ReLU(inplace = True),
+            MaxPool2d(kernel_size =2, stride =2),
+            
+            # defining another 2d conv. layer
+            Conv2d (256,448,kernel_size = 3, stride = 1, padding = 2),
+            BatchNorm2d(448),
+            ReLU(inplace = True),
+            MaxPool2d(kernel_size =2, stride =2),
+            
+        
+            
+            
+            
+        )
+        
+    
+
+        
+        self.linear_layers = Sequential(
+                          
+             Linear(87808,512),
+             
+             Linear(512,4),
+
+             
+             
+        )        
+           
+        # defining the forward pass
+        
+    def forward (self,x):
+            x = self.cnn_layers(x)
+            x = x.view(x.size(0),-1)
+            x = self.linear_layers(x)
+            return x
+        
+  
+    
+model = Net() 
+       
+                        
+# print("The designed model discription is given below:")
+print(model)
+
+# loss
+criterion = nn.CrossEntropyLoss()
+
+# Optimizer (SGD)
+optimizer = optim.Adam(model.parameters(), lr=.001)
+
+
+
+model.to(device)
+
+ ########################
+ # Training-the-model  ##
+ ########################
+print ("\nTraining the adenet Model ...")
+epochs = 50
+steps = 0
+print_every = 10
+total_train = 0
+correct_train = 0
+train_accuracy = 0
+valid_accuracy = 0
+total_correct = 0
+total_instances = 0
+
+correct = 0
+total = 0
+
+
+iters = []
+losses = []
+accuracies = []
+train_losses = []
+valid_losses = []
+train_accuracy = []
+valid_accuracy = []
+train_accuracies = []
+valid_accuracies = []
+ 
+
+since = time.time()
+best_acc = 0.0
+train_loss = 0.0
+valid_loss = 0.0
+ 
+for epoch in range(epochs):
+    for i,data,in enumerate (trainloader,0):
+        steps +=1
+        # get the inputs
+        
+        t_image,mask = data
+       
+        t_image,mask = t_image.to(device),mask.to(device)
+        
+        optimizer.zero_grad()
+        # forward + backward + optimize
+        
+        outputs = model(t_image)
+        loss = criterion(outputs,mask)
+        loss.backward()
+        optimizer.step()
+        train_loss += loss.item() 
+        
+        # Calculating the training accuracy
+        classifications = torch.argmax(outputs.data,1)
+        total += mask.size(0)
+        correct += (classifications == mask).sum().item()
+        train_accuracy = correct/total
+            
+      
+ ##########################    
+ # validating-the-model  ####
+ ##########################
+        
+        if steps % print_every == 0:
+            test_loss = 0
+            test_acc = 0
+            valid_loss = 0
+            valid_accuracy = 0
+            valid_correct = 0
+            total_instance = 0
+            
+            model.eval()
+            with torch.no_grad():
+                for inputs,labels in validloader: 
+                    inputs,labels = inputs.to(device),labels.to(device)
+                    logps = model(inputs)
+                    batch_loss = criterion(logps,labels)
+                    valid_loss += batch_loss.item() 
+                    # calculating the test accuracy
+                   
+                    _,predicted = torch.max(logps.data,1)
+                    total_train += labels.size(0)
+                    correct_train += (predicted == labels).sum().item()                   
+                    valid_accuracy = correct_train/total_train
+                  
+              
+    # calculate losses
+    train_loss = train_loss/len(trainloader.sampler)
+    valid_loss = valid_loss/len(validloader.sampler)
+    train_losses.append(train_loss)
+    valid_losses.append(valid_loss)
+
+    train_accuracies.append(train_accuracy)
+    valid_accuracies.append(valid_accuracy)
+
+ 
+           
+    # print training/validation statistics 
+    print(f"Epoch: {epoch+1}/{epochs}.."
+         f"Training Loss: {train_loss:.5f}..  " 
+         f"Validation Loss: {valid_loss:.5f}..  "
+         f"Training Accuracy: {train_accuracy:.5f}.."
+         f"Validation Accuracy: {valid_accuracy:.5f}..")
+    
+    
+if train_accuracy > best_acc:
+                best_acc = train_accuracy
+time_since = time.time() - since
+    
+print( '\nTraining was completed in {:.0f}m {:.0f}s'.format(time_since//60,
+                                                     time_since % 60 ))
+print('Best Train_Accuracy: {:4f}'.format(best_acc))   
+    
+
+
+# save the model
+print('Saving model ...')
+
+torch.save(model,'adenetCORN50.pth')    
+       
+
+##########################    
+ # Testing-the-model  ####
+##########################
+ 
+print( '\nTesting the model ... \n')
+
+
+test_transforms = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize (mean =[0.485,0.456,0.406], std = [0.229,0.224,0.225
+                                                            ])])
+
+batch_size = 1      #no of batches
+since = time.time()
+
+#randomly group images into batches and load the data
+test_data = ImageFolder(root='corntest',transform=test_transforms)
+
+testloader = torch.utils.data.DataLoader(test_data,batch_size = batch_size, 
+                                         shuffle=True)
+
+train_data  = ImageFolder(root='traincorn',transform=test_transforms)
+trainloader = torch.utils.data.DataLoader(train_data,batch_size = batch_size, 
+                                         shuffle=True)
+
+single_batch = next(iter(testloader))
+print("Output label tensors of the first image in the batch: ", single_batch[1])
+print("\nOutput label tensor shape: ", single_batch[1].shape)
+
+
+#Plot the first image in the  batch
+single_image = single_batch[0][0]
+#single_image.shape
+plt.imshow(single_image.permute(1, 2, 0))
+
+
+#predict the image
+model = torch.load('adenetCORN50.pth')
+
+y_pred_list = []
+y_true_list = []
+with torch.no_grad():
+    for x_batch, y_batch in tqdm(testloader):
+        x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+        y_test_pred = model(x_batch)
+        y_test_pred = torch.log_softmax(y_test_pred, dim=1)
+        _, y_pred_tag = torch.max(y_test_pred, dim = 1)
+        y_pred_list.append(y_pred_tag.cpu().numpy())
+        y_true_list.append(y_batch.cpu().numpy())
+        
+       
+#flatten out the list
+
+y_pred_list = [i[0] for i in y_pred_list]
+y_true_list = [i[0] for i in y_true_list]
+
+i = 0
+true_prediction = 0
+acc_list = []
+
+test_idx2class = {v: k for k, v in test_data.class_to_idx.items()}
+train_idx2class = {v: k for k, v in train_data.class_to_idx.items()}
+
+print('*********************************')
+print('  One to One Prediction Comparison')
+print('\nPredicted              Actual')
+
+print('******************************************')
+print('classification report')
+print(classification_report(y_true_list, y_pred_list))
+
+print('******************************************')
+print('confusion matrix')
+print(confusion_matrix(y_true_list, y_pred_list))
+
+time_since = time.time() - since
+print( '\nTesting was completed in {:.0f}m {:.0f}s'.format(time_since//60,
+                                                     time_since % 60 ))
+
+
+###################################    
+ # plotting-the-AUC-ROC curve  ####
+###################################
+
+def test_class_probabilities (model,device,testloader,which_class):
+    model.eval()
+    actuals = []
+    probabilities = []
+    
+    
+    with torch.no_grad():
+        for data,target in testloader:
+            data,target = data.to(device),target.to(device)
+            output = model(data)
+            prediction = output.argmax(dim =1,keepdim = True)
+            actuals.extend(target.view_as(prediction) == which_class)
+            probabilities.extend(np.exp(output[:,which_class]))
+    return [i.item() for i in actuals],[i.item() for i in probabilities]
+
+def plot_roc(actuals,probabilities,which_class):
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
+    for i in range(which_class):
+        fpr[i],tpr[i],_=roc_curve(actuals[:,i],probabilities[:,i])
+        roc_auc[i] = auc(fpr[i],tpr[i])
+
+actuals,class_probabilities = test_class_probabilities (model,device,testloader,0)
+fpr0,tpr0,_ = roc_curve(actuals,class_probabilities)
+auc_score0 = roc_auc_score(actuals,class_probabilities)
+actuals,class_probabilities = test_class_probabilities (model,device,testloader,1)
+fpr1,tpr1,_ = roc_curve(actuals,class_probabilities)
+auc_score1 = roc_auc_score(actuals,class_probabilities)
+actuals,class_probabilities = test_class_probabilities (model,device,testloader,2)
+fpr2,tpr2,_ = roc_curve(actuals,class_probabilities)
+auc_score2 = roc_auc_score(actuals,class_probabilities)
+actuals,class_probabilities = test_class_probabilities (model,device,testloader,3)
+fpr3,tpr3,_ = roc_curve(actuals,class_probabilities)
+auc_score3 = roc_auc_score(actuals,class_probabilities)
+
+
+fpr,tpr,_= roc_curve(actuals,class_probabilities)
+roc_auc = auc(fpr,tpr)
+auc_score = roc_auc_score(actuals,class_probabilities)
+
+# AUC score
+auc_score0 = roc_auc_score(actuals,class_probabilities)
+
+print('Gray leaf spot AUC:%.2f' % auc_score0)
+print('Common rust AUC:%.2f' % auc_score1)
+print('Healthy AUC:%.2f' % auc_score2)
+print('Northern Leaf Blight AUC:%.2f' % auc_score3)
+
+plt.figure()
+lw = 2
+
+   
+# Plot the model
+
+fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(6,5))
+axes[0]=plt.subplot(111)
+axes[0].plot(train_losses,label='Training Loss')
+axes[0].plot(valid_losses,label='Validation Loss')
+plt.legend(frameon=False)
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.title('Train and Validate loss for Corn Disease using developed model and Adam')
+plt.savefig('adenetcornlossC50.pdf')
+
+plt.show()
+
+# plot the model
+fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(6,5))
+axes[0]=plt.subplot(111)
+axes[0].plot(train_accuracies,label='Training Accuracy')
+axes[0].plot(valid_accuracies,label='Validation Accuracy')
+plt.legend(frameon=False)
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.title('Train and Validate accuracy for Corn Disease using developed model and Adam')
+plt.savefig('save as adenetcornlosFs0.pdf')
+plt.show()
+
+
+
+# Plot the model
+fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(6,5))
+#axes[0]=plt.subplot(111)
+axes.plot(acc_list,label='Testing Accuracy')
+plt.legend(frameon=False)
+plt.xlabel('Samples')
+plt.ylabel('Testing accuracy (%)')
+plt.savefig('save as adenetcorntestF50.pdf')
+
+plt.show()   
+
+# plot the AUC ROC CURVE
+
+plt.plot([0.0, 1.0], [0.0, 1.0], color ='black',lw=lw,linestyle ='--')
+plt.plot(fpr0,tpr0,linestyle = '--',color = 'green',label = 'Gray leaf spot')
+plt.plot(fpr1,tpr1,linestyle = '--',color = 'red',label = 'Common rust')
+plt.plot(fpr2,tpr2,linestyle = '--',color = 'navy',label = 'Healthy')
+plt.plot(fpr3,tpr3,linestyle = '--',color = 'blue',label = 'Northern Leaf blight')
+
+plt.xlim ([0.0,1.0])
+plt.ylim ([0.0,1.05]) 
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('ROC for corn disease classification using developed model and Adam')
+plt.legend(loc="lower right")
+plt.savefig('save as adenetcornrocF50.pdf')
+
+
+plt.show ()
+
+# plot confusion matrix
+
+confusion_matrix_df = pd.DataFrame(confusion_matrix(y_true_list, y_pred_list)).rename(columns=train_idx2class, index=test_idx2class)
+fig, ax = plt.subplots(figsize=(8,6))         
+sns.heatmap(confusion_matrix_df, annot=True, ax=ax)
+plt.xlabel('Actual Classes')
+plt.ylabel('Testing Data Classes')
+plt.title('Confusion matrix for corn disease classification using developed model and Adam')
+
+plt.savefig('save as alex-matrixcornFH50.pdf')
+
+
